@@ -18,7 +18,6 @@ def load_ad_domains(file_path):
 
 # Charger les domaines de publicité depuis le fichier
 AD_DOMAINS = load_ad_domains('.AD_DOMAINS')
-FAMILY_LINK_DOMAINS = ["familylink.google.com"]
 
 class DNSInterceptorApp(ctk.CTk):
     def __init__(self):
@@ -72,42 +71,8 @@ class DNSInterceptorApp(ctk.CTk):
             query_name = packet[DNSQR].qname.decode('utf-8')
             self.log(f"Requête DNS: {query_name}")
             
-            # Vérifier si c'est un paquet Family Link
-            if any(domain in query_name for domain in FAMILY_LINK_DOMAINS):
-                self.log("Paquet Family Link détecté")
-                
-                # Initialiser current_data à une chaîne vide par défaut
-                current_data = ""
-                
-                # Afficher les données actuelles du paquet si disponibles
-                if packet.haslayer(Raw):
-                    current_data = packet[Raw].load.decode('utf-8', errors='ignore')
-                    self.log(f"Données actuelles du paquet: {current_data}")
-                
-                # Demander si on veut modifier le paquet
-                if self.ask_modify_packet(current_data):
-                    if packet.haslayer(Raw):
-                        new_data = self.ask_new_data(current_data)
-                        packet[Raw].load = new_data.encode('utf-8')
-                        
-                        # Recalculer les checksums si nécessaire
-                        if packet.haslayer(IP):
-                            del packet[IP].chksum
-                        if packet.haslayer(UDP):
-                            del packet[UDP].chksum
-                        elif packet.haslayer(TCP):
-                            del packet[TCP].chksum
-                        
-                        packet = packet.__class__(bytes(packet))
-                        self.log("Le paquet a été modifié et sera renvoyé.")
-                    else:
-                        self.log("Aucune donnée brute à modifier.")
-                    
-                    send(packet)
-                else:
-                    self.log("Le paquet n'a pas été modifié.")
             # Bloquer les paquets publicitaires
-            elif any(domain in query_name for domain in AD_DOMAINS):
+            if any(domain in query_name for domain in AD_DOMAINS):
                 blocked_ads += 1
                 self.log(f"Paquet publicitaire détecté !")
                 self.ad_counter.configure(text=f"Nombre de pubs bloqués : {blocked_ads} !")
@@ -115,52 +80,6 @@ class DNSInterceptorApp(ctk.CTk):
             else:
                 # Renvoyer les paquets normaux
                 send(packet)
-
-    def ask_modify_packet(self, current_data):
-        dialog = ctk.CTkToplevel(self)
-        dialog.title("Modification du Paquet")
-        
-        label = ctk.CTkLabel(dialog, text="Voulez-vous modifier ce paquet Family Link ?")
-        label.pack(pady=10)
-        
-        data_label = ctk.CTkLabel(dialog, text=f"Données actuelles :\n{current_data}", justify="left")
-        data_label.pack(pady=10)
-        
-        button_frame = ctk.CTkFrame(dialog)
-        button_frame.pack(pady=10)
-
-        yes_button = ctk.CTkButton(button_frame, text="Oui", command=lambda: self._set_response(dialog, True))
-        yes_button.pack(side="left", padx=5)
-
-        no_button = ctk.CTkButton(button_frame, text="Non", command=lambda: self._set_response(dialog, False))
-        no_button.pack(side="left", padx=5)
-
-        dialog.transient(self)
-        dialog.grab_set()
-        self.wait_window(dialog)
-        return self._response
-
-    def ask_new_data(self, current_data):
-        dialog = ctk.CTkToplevel(self)
-        dialog.title("Modification des données")
-
-        label = ctk.CTkLabel(dialog, text=f"Données actuelles :\n{current_data}")
-        label.pack(pady=10)
-
-        entry = ctk.CTkEntry(dialog)
-        entry.insert(0, current_data)  # Insérer les données actuelles dans l'entrée
-        entry.pack(pady=10)
-
-        button_frame = ctk.CTkFrame(dialog)
-        button_frame.pack(pady=10)
-
-        ok_button = ctk.CTkButton(button_frame, text="OK", command=lambda: self._set_response(dialog, entry.get()))
-        ok_button.pack(side="left", padx=5)
-
-        dialog.transient(self)
-        dialog.grab_set()
-        self.wait_window(dialog)
-        return self._response
 
     def _set_response(self, dialog, response):
         self._response = response
@@ -206,4 +125,3 @@ if __name__ == "__main__":
 
     app = DNSInterceptorApp()
     app.mainloop()
-
